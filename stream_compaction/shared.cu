@@ -179,26 +179,42 @@ namespace StreamCompaction {
 
 		void scanWorkEfficient(int n, int* odata, const int* idata) {
 
+			//int* dev_idata;
+
+			//int* dev_odata;
+
+
+			//cudaMalloc((void**)&dev_idata, n * sizeof(int));
+
+			//cudaMalloc((void**)&dev_odata, n * sizeof(int));
+
+
+			int levels = ilog2ceil(n);
+
+			int paddedN = 1 << levels;
+
 			int* dev_idata;
 
 			int* dev_odata;
 
 
-			cudaMalloc((void**)&dev_idata, n * sizeof(int));
+			cudaMalloc((void**)&dev_idata, paddedN * sizeof(int));
+			
+			cudaMalloc((void**)&dev_odata, paddedN * sizeof(int));
 
-			cudaMalloc((void**)&dev_odata, n * sizeof(int));
+			cudaMemset(dev_idata, 0, paddedN * sizeof(int));
 
 
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
 
-			int sharedBytes = n * sizeof(int);
+			int sharedBytes = paddedN * sizeof(int);
 
 
 			timer().startGpuTimer();
 
-			kernScanWorkEfficient << <1, n / 2, sharedBytes >> > (
-				n, dev_odata, dev_idata
+			kernScanWorkEfficient << <1, paddedN / 2, sharedBytes >> > (
+				paddedN, dev_odata, dev_idata
 		    );
 
 			timer().endGpuTimer();
@@ -314,26 +330,43 @@ namespace StreamCompaction {
 
 		void scanWorkEfficientBankConflictFree(int n, int* odata, const int* idata) {
 
+			//int* dev_idata;
+			//int* dev_odata;
+
+
+
+			//cudaMalloc((void**)&dev_idata, n * sizeof(int));
+			//cudaMalloc((void**)&dev_odata, n * sizeof(int));
+
+
+			int levels = ilog2ceil(n);
+
+			int paddedN = 1 << levels;
+
 			int* dev_idata;
+
 			int* dev_odata;
 
 
+			cudaMalloc((void**)&dev_idata, paddedN * sizeof(int));
 
-			cudaMalloc((void**)&dev_idata, n * sizeof(int));
-			cudaMalloc((void**)&dev_odata, n * sizeof(int));
+			cudaMalloc((void**)&dev_odata, paddedN * sizeof(int));
+
+
+			cudaMemset(dev_idata, 0, paddedN * sizeof(int));
 
 
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
 
-			int paddedSize = n + conflictFreeOffset(n - 1);
+			int paddedSize = paddedN + conflictFreeOffset(paddedN - 1);
 			int sharedBytes = paddedSize * sizeof(int);
 
 
 			timer().startGpuTimer();
 
-			kernScanWorkEfficientBankConflictFree << <1, n / 2, sharedBytes >> > (
-				n, dev_odata, dev_idata
+			kernScanWorkEfficientBankConflictFree << <1, paddedN / 2, sharedBytes >> > (
+				paddedN, dev_odata, dev_idata
 			);
 
 			timer().endGpuTimer();

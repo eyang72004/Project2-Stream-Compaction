@@ -27,7 +27,7 @@ namespace StreamCompaction {
             int right = (index + 1) * stride - 1;
 
 
-            if (right < n) {
+            if (right >= 0 && right < n) {
                 int left = right - (stride >> 1);
                 data[right] += data[left];
             }
@@ -46,7 +46,7 @@ namespace StreamCompaction {
             int right = (index + 1) * stride - 1;
 
 
-            if (right < n) {
+            if (right >= 0 && right < n) {
                 int left = right - (stride >> 1);
 
 
@@ -92,7 +92,7 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
 
-            int blockSize = 64;
+            int blockSize = 512;
             // int blocksPerGrid = (paddedN + blockSize - 1) / blockSize;
 
 
@@ -149,6 +149,69 @@ namespace StreamCompaction {
             cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             cudaFree(dev_data);
+        }
+
+
+        // Baseline work-efficient scan for attempted extra credit performance comparison
+        // Uses same algorithm and kernels as scan(), but launches full padded grid at every upsweep and downsweep level
+        void scanUnoptimized(int n, int* odata, const int* idata) {
+
+
+            int levels = ilog2ceil(n);
+
+            // Pad working array to the next power of two
+            int paddedN = 1 << levels;
+
+            int* dev_data;
+
+            cudaMalloc((void**)&dev_data, paddedN * sizeof(int));
+
+
+            // Initialize padded region to 0
+            cudaMemset(dev_data, 0, paddedN * sizeof(int));
+
+            cudaMemcpy(dev_data, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+
+            timer().startGpuTimer();
+
+            int blockSize = 64;
+
+
+            int blocksPerGrid = (paddedN + blockSize - 1) / blockSize;
+
+
+            // Upsweep: launch full padded grid at every tree level
+            for (int d = 0; d < levels; d++) {
+                kernUpSweep << <blocksPerGrid, blockSize >> > (
+                    paddedN, d, dev_data
+                );
+            }
+
+
+            // Set root to 0 before downsweep
+            kernSetZero << <1, 1 >> > (
+                paddedN, dev_data
+            );
+
+
+
+
+            // Downsweep: launch full padded grid at every tree level
+            for (int d = levels - 1; d >= 0; d--) {
+                kernDownSweep << <blocksPerGrid, blockSize >> > (
+                    paddedN, d, dev_data
+                );
+            }
+
+
+            timer().endGpuTimer();
+
+
+
+            cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+            cudaFree(dev_data);
+
         }
 
         // Perform same work-efficient exclusive scan on data already on GPU

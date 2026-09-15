@@ -19,12 +19,16 @@
 const int SIZE = 1 << 8; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 const int BENCHMARK_SIZE = 1000000;
-const int BENCHMARK_TRIALS = 5;
+const int SHARED_BENCHMARK_SIZE = 1024;
+const int BENCHMARK_WARMUP_TRIALS = 10;
+const int BENCHMARK_TRIALS = 20;
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
 int* benchmarkInput = new int[BENCHMARK_SIZE];
 int* benchmarkOutput = new int[BENCHMARK_SIZE];
+//int* sharedBenchmarkInput = new int[SHARED_BENCHMARK_SIZE];
+//int* sharedBenchmarkOutput = new int[SHARED_BENCHMARK_SIZE];
 
 int main(int argc, char* argv[]) {
     // Scan tests
@@ -81,10 +85,34 @@ int main(int argc, char* argv[]) {
     printCmpResult(SIZE, b, c);
 
     zeroArray(SIZE, c);
+    printDesc("shared naive scan, non-power-of-two");
+    StreamCompaction::Shared::scanNaive(NPOT, c, a);
+    printElapsedTime(StreamCompaction::Shared::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printCmpResult(NPOT, b, c);
+
+    zeroArray(SIZE, c);
     printDesc("shared work-efficient scan, power-of-two");
     StreamCompaction::Shared::scanWorkEfficient(SIZE, c, a);
     printElapsedTime(StreamCompaction::Shared::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     printCmpResult(SIZE, b, c);
+
+    zeroArray(SIZE, c);
+    printDesc("shared work-efficient scan, non-power-of-two");
+    StreamCompaction::Shared::scanWorkEfficient(NPOT, c, a);
+    printElapsedTime(StreamCompaction::Shared::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printCmpResult(NPOT, b, c);
+
+    zeroArray(SIZE, c);
+    printDesc("unoptimized work-efficient scan, power-of-two");
+    StreamCompaction::Efficient::scanUnoptimized(SIZE, c, a);
+    printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printCmpResult(SIZE, b, c);
+
+    zeroArray(SIZE, c);
+    printDesc("unoptimized work-efficient scan, non-power-of-two");
+    StreamCompaction::Efficient::scanUnoptimized(NPOT, c, a);
+    printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printCmpResult(NPOT, b, c);
 
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, power-of-two");
@@ -103,11 +131,14 @@ int main(int argc, char* argv[]) {
     zeroArray(SIZE, c);
     printDesc("shared work-efficient bank-conflict-free scan, power-of-two");
     StreamCompaction::Shared::scanWorkEfficientBankConflictFree(SIZE, c, a);
-    printElapsedTime(
-        StreamCompaction::Shared::timer().getGpuElapsedTimeForPreviousOperation(),
-        "(CUDA Measured)"
-    );
+    printElapsedTime(StreamCompaction::Shared::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     printCmpResult(SIZE, b, c);
+
+    zeroArray(SIZE, c);
+    printDesc("shared work-efficient bank-conflict-free scan, non-power-of-two");
+    StreamCompaction::Shared::scanWorkEfficientBankConflictFree(NPOT, c, a);
+    printElapsedTime(StreamCompaction::Shared::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printCmpResult(NPOT, b, c);
 
     zeroArray(SIZE, c);
     printDesc("thrust scan, power-of-two");
@@ -232,14 +263,27 @@ int main(int argc, char* argv[]) {
 
     genArray(BENCHMARK_SIZE, benchmarkInput, 50);
 
+    // genArray(SHARED_BENCHMARK_SIZE, sharedBenchmarkInput, 50);
+
     float cpuTotal = 0.0f;
     float naiveTotal = 0.0f;
     float efficientTotal = 0.0f;
     float thrustTotal = 0.0f;
+    float unoptimizedEfficientTotal = 0.0f;
+    float sharedBankConflictFreeTotal = 0.0f;
+    float sharedWorkEfficientTotal = 0.0f;
 
     zeroArray(BENCHMARK_SIZE, benchmarkOutput);
 
     printDesc("benchmark cpu scan");
+
+    for (int warmup = 0; warmup < BENCHMARK_WARMUP_TRIALS; warmup++) {
+        StreamCompaction::CPU::scan(
+            BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+    }
 
     for (int trial = 0; trial < BENCHMARK_TRIALS; trial++) {
         StreamCompaction::CPU::scan(
@@ -260,6 +304,18 @@ int main(int argc, char* argv[]) {
 
     printDesc("benchmark naive scan");
 
+    for (int warmup = 0; warmup < BENCHMARK_WARMUP_TRIALS; warmup++) {
+        StreamCompaction::Naive::scan(
+            BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+
+
+        // printf("   warmup %d: %fms\n", warmup + 1, StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation());
+    }
+
+
     for (int trial = 0; trial < BENCHMARK_TRIALS; trial++) {
         StreamCompaction::Naive::scan(
             BENCHMARK_SIZE,
@@ -275,7 +331,45 @@ int main(int argc, char* argv[]) {
 
     zeroArray(BENCHMARK_SIZE, benchmarkOutput);
 
+    printDesc("benchmark unoptimized work-efficient scan");
+
+
+    for (int warmup = 0; warmup < BENCHMARK_WARMUP_TRIALS; warmup++) {
+        StreamCompaction::Efficient::scanUnoptimized(
+            BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+    }
+
+    for (int trial = 0; trial < BENCHMARK_TRIALS; trial++) {
+        StreamCompaction::Efficient::scanUnoptimized(
+            BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+
+        unoptimizedEfficientTotal += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+
+
+
+    }
+
+    printf("   average elapsed time: %fms\n", unoptimizedEfficientTotal / BENCHMARK_TRIALS);
+
+    zeroArray(BENCHMARK_SIZE, benchmarkOutput);
+
     printDesc("benchmark work-efficient scan");
+
+    for (int warmup = 0; warmup < BENCHMARK_WARMUP_TRIALS; warmup++) {
+        StreamCompaction::Efficient::scan(
+            BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+
+        // printf("   warmup %d: %fms\n", warmup + 1, StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation());
+    }
 
     for (int trial = 0; trial < BENCHMARK_TRIALS; trial++) {
         StreamCompaction::Efficient::scan(
@@ -294,6 +388,14 @@ int main(int argc, char* argv[]) {
 
     printDesc("benchmark thrust scan");
 
+    for (int warmup = 0; warmup < BENCHMARK_WARMUP_TRIALS; warmup++) {
+        StreamCompaction::Thrust::scan(
+            BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+    }
+
     for (int trial = 0; trial < BENCHMARK_TRIALS; trial++) {
         StreamCompaction::Thrust::scan(
             BENCHMARK_SIZE,
@@ -305,6 +407,58 @@ int main(int argc, char* argv[]) {
     }
 
     printf("   average elapsed time: %fms\n", thrustTotal / BENCHMARK_TRIALS);
+
+
+    zeroArray(SHARED_BENCHMARK_SIZE, benchmarkOutput);
+
+    printDesc("benchmark shared work-efficient scan");
+
+    
+    for (int warmup = 0; warmup < BENCHMARK_WARMUP_TRIALS; warmup++) {
+        StreamCompaction::Shared::scanWorkEfficient(
+            SHARED_BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+    }
+
+    for (int trial = 0; trial < BENCHMARK_TRIALS; trial++) {
+        StreamCompaction::Shared::scanWorkEfficient(
+            SHARED_BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+
+        sharedWorkEfficientTotal += StreamCompaction::Shared::timer().getGpuElapsedTimeForPreviousOperation();
+
+    }
+
+    printf("   average elapsed time: %fms\n", sharedWorkEfficientTotal / BENCHMARK_TRIALS);
+
+
+    zeroArray(SHARED_BENCHMARK_SIZE, benchmarkOutput);
+
+    printDesc("benchmark shared work-efficient bank-conflict-free scan");
+
+    for (int warmup = 0; warmup < BENCHMARK_WARMUP_TRIALS; warmup++) {
+        StreamCompaction::Shared::scanWorkEfficientBankConflictFree(
+            SHARED_BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+    }
+
+    for (int trial = 0; trial < BENCHMARK_TRIALS; trial++) {
+        StreamCompaction::Shared::scanWorkEfficientBankConflictFree(
+            SHARED_BENCHMARK_SIZE,
+            benchmarkOutput,
+            benchmarkInput
+        );
+
+        sharedBankConflictFreeTotal += StreamCompaction::Shared::timer().getGpuElapsedTimeForPreviousOperation();
+    }
+
+    printf("   average elapsed time: %fms\n", sharedBankConflictFreeTotal / BENCHMARK_TRIALS);
 
 
     delete[] benchmarkInput;
