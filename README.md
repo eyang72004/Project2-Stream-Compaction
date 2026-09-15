@@ -119,10 +119,10 @@ To measure this optimization in isolation, I retained an unoptimized version of 
 
 | Implementation | Median Time (ms) |
 |:---------------|-----------------:|
-| Full-grid work-efficient scan | 0.956995 |
-| Active-grid work-efficient scan | **0.360518** |
+| Full-grid work-efficient scan | 0.442200 |
+| Active-grid work-efficient scan | **0.340526** |
 
-Launching only the active work reduced the median scan time from 0.956995 ms to 0.360518 ms. This corresponds to approximately a **62.3% reduction in execution time**, or a **2.65x speedup**, demonstrating that avoiding unnecessary thread and block launches at the deeper tree levels had a substantial effect on this implementation.
+Launching only the active work reduced the median scan time from 0.442200 ms to 0.340526 ms. This corresponds to approximately a **23.0% reduction in execution time**, or a **1.30x speedup**, demonstrating that avoiding unnecessary thread and block launches at the deeper tree levels had a substantial effect on this implementation.
 
 
 ### Extra Credit: Radix Sort

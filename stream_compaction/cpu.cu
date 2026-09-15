@@ -63,26 +63,18 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
             // TODO
 
             int* bools = new int[n];
             int* indices = new int[n];
-
 
             // Map each input element to 1 to keep it, or 0 otherwise
             for (int i = 0; i < n; i++) {
                 bools[i] = (idata[i] != 0) ? 1 : 0;
             }
 
-
             // Exclusive scan of the keep flags gives each element its output index
-            int sum = 0;
-            for (int i = 0; i < n; i++) {
-                indices[i] = sum;
-                sum += bools[i];
-            }
-
+            scan(n, indices, bools);
 
             // Scatter each nonzero element to its position in the compacted array
             for (int i = 0; i < n; i++) {
@@ -91,13 +83,14 @@ namespace StreamCompaction {
                 }
             }
 
-
+            // Compacted length is the final exclusive-scan value plus the last flag
+            int count = (n > 0) ? indices[n - 1] + bools[n - 1] : 0;
 
             delete[] bools;
             delete[] indices;
-            timer().endCpuTimer();
+
             // return -1;
-            return sum;
+            return count;
         }
     }
 }

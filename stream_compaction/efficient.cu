@@ -174,7 +174,7 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
 
-            int blockSize = 64;
+            int blockSize = 512;
 
 
             int blocksPerGrid = (paddedN + blockSize - 1) / blockSize;
