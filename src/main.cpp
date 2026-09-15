@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <algorithm>
+#include <chrono>
 #include <stream_compaction/cpu.h>
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
@@ -187,8 +188,14 @@ int main(int argc, char* argv[]) {
 
     zeroArray(SIZE, c);
     printDesc("cpu compact with scan");
+
+    auto compactStart = std::chrono::high_resolution_clock::now();
     count = StreamCompaction::CPU::compactWithScan(SIZE, c, a);
-    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    auto compactEnd = std::chrono::high_resolution_clock::now();
+
+    std::chrono::duration<double, std::milli> compactDuration = compactEnd - compactStart;
+    printElapsedTime(static_cast<float>(compactDuration.count()), "(std::chrono Measured)");
+
     printArray(count, c, true);
     printCmpLenResult(count, expectedCount, b, c);
 
